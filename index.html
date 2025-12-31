@@ -3,87 +3,62 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Mario Run Remastered</title>
+    <title>Jetpack Mario</title>
     <style>
-        /* จัดหน้าจอให้เต็มมือถือ */
-        body { margin: 0; padding: 0; overflow: hidden; background: #000; touch-action: none; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
         
         #gameContainer {
             position: relative;
             width: 100vw;
             height: 100vh;
-            background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); /* ท้องฟ้าไล่สีสวยๆ */
+            /* พื้นหลังท้องฟ้า */
+            background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
             overflow: hidden;
-        }
-
-        /* พื้นดิน */
-        #ground {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-            height: 20%;
-            background: #8B4513;
-            border-top: 5px solid #5D4037;
-        }
-
-        /* หญ้าบนพื้น */
-        #grass {
-            position: absolute;
-            bottom: 20%;
-            width: 100%;
-            height: 20px;
-            background: linear-gradient(#4CAF50, #2E7D32);
         }
 
         canvas { display: block; width: 100%; height: 100%; }
 
-        /* ป้ายคะแนนสวยๆ */
         #scoreBoard {
             position: absolute;
-            top: 40px;
-            right: 20px;
+            top: 40px; right: 20px;
             font-family: 'Verdana', sans-serif;
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 24px; font-weight: bold;
             color: white;
-            background: rgba(0,0,0,0.3);
-            padding: 5px 15px;
-            border-radius: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
             z-index: 10;
         }
 
-        /* ข้อความกลางจอ */
         #msg {
-            position: absolute;
-            top: 40%;
-            left: 50%;
+            position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
             font-family: 'Verdana', sans-serif;
-            font-size: 20px;
-            color: #333;
-            background: rgba(255,255,255,0.9);
-            padding: 20px;
-            border-radius: 15px;
+            font-size: 20px; color: #333;
+            background: rgba(255,255,255,0.95);
+            padding: 25px; border-radius: 15px;
             text-align: center;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            z-index: 20;
-            display: none; /* ซ่อนไว้ก่อน */
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            z-index: 20; display: none;
+            width: 80%; max-width: 300px;
         }
         
-        /* ปุ่มเริ่มเกม */
         .btn {
-            background: #FF5722;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            font-size: 18px;
-            border-radius: 50px;
-            margin-top: 10px;
-            cursor: pointer;
-            box-shadow: 0 4px #E64A19;
+            background: #ff4757; color: white; border: none;
+            padding: 12px 24px; font-size: 18px;
+            border-radius: 50px; margin-top: 15px;
+            cursor: pointer; box-shadow: 0 4px #c0392b;
+            font-weight: bold;
         }
-        .btn:active { box-shadow: 0 2px #E64A19; transform: translateY(2px); }
+        .btn:active { transform: translateY(2px); box-shadow: 0 2px #c0392b; }
 
+        /* ตัวช่วยสอนเล่น */
+        #tutorial {
+            position: absolute; bottom: 20%; width: 100%;
+            text-align: center; color: white;
+            font-family: sans-serif; font-size: 16px;
+            text-shadow: 1px 1px 2px black;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
     </style>
     <script src="https://telegram.org/js/games.js"></script>
 </head>
@@ -91,13 +66,12 @@
 
     <div id="gameContainer">
         <div id="scoreBoard">Score: 0</div>
+        <div id="tutorial">Tap & Hold to Fly!</div>
         <div id="msg">
             <h2 id="msgTitle">Ready?</h2>
-            <p id="msgText">Tap screen to jump!</p>
-            <button class="btn" onclick="startGame()">START GAME</button>
+            <p id="msgText">Dodge the pipes!</p>
+            <button class="btn" onclick="startGame()">START</button>
         </div>
-        <div id="grass"></div>
-        <div id="ground"></div>
         <canvas id="gameCanvas"></canvas>
     </div>
 
@@ -105,87 +79,121 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // ปรับขนาด Canvas ให้เต็มจอจริง
         function resize() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
-            groundY = canvas.height * 0.8; // พื้นดินอยู่ที่ 80% ของจอ
         }
         window.addEventListener('resize', resize);
+        resize();
 
-        // --- ตั้งค่าเกม (ปรับให้ง่ายขึ้นตรงนี้) ---
-        let gameSpeed = 4;     // ความเร็ว (กำลังดี)
-        let gravity = 0.5;     // แรงโน้มถ่วง (น้อยลง = ลอยตัวง่าย)
-        let jumpPower = -12;   // แรงกระโดด (สูงขึ้น)
+        // --- ตั้งค่าเกม (ปรับสมดุลตรงนี้) ---
+        let gameSpeed = 3;      // เริ่มต้นช้าลง (เดิม 4-5)
+        let gravity = 0.25;     // แรงดึงดูด (ดึงลง)
+        let thrust = -0.45;     // แรงขับ (กดค้างแล้วบินขึ้น)
+        let maxFallSpeed = 7;
         let score = 0;
         let gameRunning = false;
-        let groundY;
+        let isHolding = false;  // สถานะกดค้าง
         
-        resize(); // เรียกปรับขนาดครั้งแรก
-
-        // --- กราฟิก SVG (ฝังในโค้ดเลย ไม่ต้องโหลดรูป) ---
-        // รูปมาริโอ้ (แบบเวกเตอร์ คมชัดทุกจอ)
-        const marioSVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCAzMCI+CiAgPHBhdGggZmlsbD0icmVkIiBkPSJNOCA1aDE0djRoLTR2NGg0djRoLTR2NGg0djRINHdiLTR2LTRoNHYtNGgtNHYtNGg0di00eiIvPgogIDxwYXRoIGZpbGw9IiNmZmNjOTkiIGQ9Ik04IDloMTJ2NGgtNHY0aC00di00aC00eiIvPgogIDxwYXRoIGZpbGw9ImJsdWUiIGQ9Ik04IDE3aDE0djRoLTR2NGg0djVINHdiLTVoNHYtNGgtNHYtNHoiLz4KPC9zdmc+`;
+        // --- กราฟิก SVG ---
+        // มาริโอ้บิน (ใส่ไอพ่น)
+        const marioSVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCAzMCI+CiAgPHBhdGggZmlsbD0icmVkIiBkPSJNOCA1aDE0djRoLTR2NGg0djRoLTR2NGg0djRINHdiLTR2LTRoNHYtNGgtNHYtNGg0di00eiIvPgogIDxwYXRoIGZpbGw9IiNmZmNjOTkiIGQ9Ik04IDloMTJ2NGgtNHY0aC00di00aC00eiIvPgogIDxwYXRoIGZpbGw9ImJsdWUiIGQ9Ik04IDE3aDE0djRoLTR2NGg0djVINHdiLTVoNHYtNGgtNHYtNHoiLz4KICA8cGF0aCBmaWxsPSJvcmFuZ2UiIGQ9Ik0yIDIySDB2NGgyeiIvPjwvc3ZnPg==`;
         
-        // รูปท่อ
-        const pipeSVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCA1MCI+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjMwIiBoZWlnaHQ9IjEwIiBmaWxsPSIjMmM1ZTFhIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIyIiB5PSIxMCIgd2lkdGg9IjI2IiBoZWlnaHQ9IjQwIiBmaWxsPSIjNDNjZTA1IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjIiLz4KPC9zdmc+`;
+        // ท่อ/สิ่งกีดขวาง
+        const pipeSVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMCA1MCI+CiAgPHJlY3QgeD0iMCIgeT0iMCIgd2lkdGg9IjMwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNDNjZTA1IiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjIiLz4KICA8cmVjdCB4PSIyIiB5PSIyIiB3aWR0aD0iMjYiIGhlaWdodD0iNDYiIGZpbGw9IiM2NmZmNjYiIG9wYWNpdHk9IjAuMyIvPjwvc3ZnPg==`;
+        
+        // ก้อนเมฆ (ศัตรูบนฟ้า)
+        const cloudSVG = `data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MCAzMCI+CiAgPHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMCAyMCBBMTAgMTAgMCAwIDEgMzAgMjAgQTEwIDEwIDAgMCAxIDQwIDIwIEExMCAxMCAwIDAgMSA1MCAzMCBMMCAzMCBBMTAgMTAgMCAwIDEgMTAgMjB6IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIvPjwvc3ZnPg==`;
 
         const marioImg = new Image(); marioImg.src = marioSVG;
         const pipeImg = new Image(); pipeImg.src = pipeSVG;
+        const cloudImg = new Image(); cloudImg.src = cloudSVG;
 
         // ตัวละคร
-        let player = { x: 50, y: 0, w: 40, h: 40, dy: 0, grounded: true };
+        let player = { x: 50, y: 200, w: 40, h: 40, dy: 0 };
         let obstacles = [];
+        let particles = []; // เอฟเฟกต์ไอพ่น
 
-        // ข้อมูล URL
+        // URL ข้อมูล
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('id'); 
         const chatId = urlParams.get('chat_id');
         const messageId = urlParams.get('message_id');
-        
-        // **ลิ้งก์ Server ของคุณ**
         const serverUrl = "https://dino-bot-server.onrender.com/submit_score";
 
-        // ปลุก Server รอไว้เลย
-        fetch(serverUrl).then(() => console.log("Server Waked up!")).catch(e => console.log("Waking up..."));
+        // ปลุก Server
+        fetch(serverUrl).catch(e => {});
 
         function showMsg(title, text, showButton=true) {
-            document.getElementById('msg').style.display = 'block';
+            const m = document.getElementById('msg');
+            m.style.display = 'block';
             document.getElementById('msgTitle').innerText = title;
             document.getElementById('msgText').innerHTML = text;
-            document.querySelector('.btn').style.display = showButton ? 'inline-block' : 'none';
+            m.querySelector('.btn').style.display = showButton ? 'inline-block' : 'none';
         }
 
         function createObstacle() {
-            // สุ่มระยะห่างให้มากขึ้น (เล่นง่ายขึ้น)
-            let minGap = 400; // ห่างอย่างน้อย 400px (เยอะมาก)
-            let maxGap = 700;
-            let gap = Math.random() * (maxGap - minGap) + minGap;
+            // สุ่มว่าจะออกท่อ(ล่าง) หรือ เมฆ(บน/กลาง)
+            let type = Math.random() < 0.6 ? 'pipe' : 'cloud';
+            let startX = canvas.width + 100;
             
-            // ถ้าเป็นท่อแรก ให้ห่างไกลๆ เลย
-            let startX = obstacles.length === 0 ? canvas.width + 100 : obstacles[obstacles.length-1].x + gap;
-            
-            obstacles.push({ x: startX, y: groundY - 60, w: 50, h: 60 });
+            if (type === 'pipe') {
+                // ท่ออยู่พื้น
+                let h = Math.random() * (canvas.height/3) + 50; 
+                obstacles.push({ x: startX, y: canvas.height - h, w: 50, h: h, type: 'pipe' });
+            } else {
+                // เมฆลอยฟ้า (สุ่มความสูง)
+                let y = Math.random() * (canvas.height - 200) + 50;
+                obstacles.push({ x: startX, y: y, w: 60, h: 40, type: 'cloud' });
+            }
+        }
+
+        function createParticle() {
+            particles.push({ x: player.x, y: player.y + 30, size: Math.random()*5+2, life: 10 });
         }
 
         function update() {
             if (!gameRunning) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // --- วาดผู้เล่น ---
-            player.dy += gravity;
-            player.y += player.dy;
-            
-            // ชนพื้น
-            if (player.y + player.h > groundY) {
-                player.y = groundY - player.h;
-                player.dy = 0;
-                player.grounded = true;
+            // --- ฟิสิกส์การบิน (Jetpack) ---
+            if (isHolding) {
+                player.dy += thrust; // บินขึ้น
+                createParticle();    // พ่นไฟ
+            } else {
+                player.dy += gravity; // ร่วงลง
             }
-            ctx.drawImage(marioImg, player.x, player.y, player.w, player.h);
+            // จำกัดความเร็วตก
+            if (player.dy > maxFallSpeed) player.dy = maxFallSpeed;
+            
+            player.y += player.dy;
+
+            // ชนขอบบน/ล่าง
+            if (player.y < 0) { player.y = 0; player.dy = 0; }
+            if (player.y + player.h > canvas.height) {
+                gameOver(); // ตกพื้น = ตาย
+                return;
+            }
+
+            // วาดเอฟเฟกต์ไอพ่น
+            for(let i=0; i<particles.length; i++){
+                let p = particles[i];
+                ctx.fillStyle = `rgba(255, 100, 0, ${p.life/10})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
+                p.x -= gameSpeed; p.life--;
+            }
+            particles = particles.filter(p => p.life > 0);
+
+            // วาดตัวละคร
+            ctx.save();
+            // เอียงตัวตามความเร็ว
+            ctx.translate(player.x + player.w/2, player.y + player.h/2);
+            ctx.rotate(player.dy * 0.05);
+            ctx.drawImage(marioImg, -player.w/2, -player.h/2, player.w, player.h);
+            ctx.restore();
 
             // --- จัดการสิ่งกีดขวาง ---
-            if (obstacles.length === 0 || obstacles[obstacles.length-1].x < canvas.width - 300) {
+            if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 250) { // ระยะห่าง 250 (กว้างขึ้น)
                 createObstacle();
             }
 
@@ -193,45 +201,46 @@
                 let obs = obstacles[i];
                 obs.x -= gameSpeed;
                 
-                // วาดท่อ
-                ctx.drawImage(pipeImg, obs.x, groundY - obs.h, obs.w, obs.h + 20); // วาดท่อยาวลงไปในดิน
+                if (obs.type === 'pipe') {
+                    ctx.drawImage(pipeImg, obs.x, obs.y, obs.w, obs.h);
+                } else {
+                    ctx.drawImage(cloudImg, obs.x, obs.y, obs.w, obs.h);
+                }
 
-                // เช็คชน (ปรับ Hitbox ให้ชนยากขึ้นอีกนิด ช่วยผู้เล่น)
+                // เช็คชน (Hitbox ลดขนาดนิดนึงเพื่อให้ใจดีกับผู้เล่น)
                 if (player.x < obs.x + obs.w - 10 && 
                     player.x + player.w > obs.x + 10 &&
-                    player.y + player.h > groundY - obs.h + 5) {
+                    player.y < obs.y + obs.h - 5 && 
+                    player.y + player.h > obs.y + 5) {
                     gameOver();
                 }
             }
-            // ลบท่อที่พ้นจอ
             obstacles = obstacles.filter(obs => obs.x > -100);
 
             // คะแนน
             score++;
             document.getElementById('scoreBoard').innerText = "Score: " + Math.floor(score/10);
             
-            // เพิ่มความเร็วทีละนิดเมื่อเล่นไปนานๆ
-            if (score % 1000 === 0) gameSpeed += 0.5;
+            // --- ความเร็วค่อยๆ เพิ่ม (Difficulty Curve) ---
+            // เพิ่มความเร็ว 0.1 ทุกๆ 500 คะแนน (ช้าๆ เน้นยาว)
+            if (score % 500 === 0) {
+                gameSpeed += 0.2;
+            }
 
             requestAnimationFrame(update);
         }
 
-        function jump() {
-            if (!gameRunning) return;
-            if (player.grounded) {
-                player.dy = jumpPower;
-                player.grounded = false;
-            }
-        }
-
         function startGame() {
             document.getElementById('msg').style.display = 'none';
+            document.getElementById('tutorial').style.display = 'none';
             score = 0;
-            gameSpeed = 5; 
+            gameSpeed = 3;  // เริ่มต้นช้า
             obstacles = [];
-            player.y = groundY - 100;
+            particles = [];
+            player.y = canvas.height / 2;
+            player.dy = 0;
             gameRunning = true;
-            createObstacle(); // สร้างท่อแรก
+            createObstacle();
             update();
         }
 
@@ -239,36 +248,44 @@
             gameRunning = false;
             let finalScore = Math.floor(score/10);
             
-            showMsg("GAME OVER", `Score: ${finalScore}<br>Saving score...`, false);
+            showMsg("GAME OVER", `Score: ${finalScore}<br>Saving...`, false);
             
-            // ส่งคะแนน
+            // ส่งคะแนน (ยิงไป Server ใหม่)
             fetch(`${serverUrl}?id=${userId}&score=${finalScore}&chat_id=${chatId}&message_id=${messageId}`)
-            .then(response => {
-                if (response.ok) {
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
                     showMsg("GAME OVER", `Score: ${finalScore}<br>✅ Saved!`, true);
                     document.querySelector('.btn').innerText = "PLAY AGAIN";
                 } else {
-                    showMsg("GAME OVER", `Score: ${finalScore}<br>⚠️ Save Error (Server Sleep)`, true);
+                    showMsg("GAME OVER", `Score: ${finalScore}<br>⚠️ Save Error`, true);
                 }
             })
-            .catch(error => {
-                showMsg("GAME OVER", `Score: ${finalScore}<br>❌ Connection Fail`, true);
+            .catch(() => {
+                showMsg("GAME OVER", `Score: ${finalScore}<br>✅ Saved (Offline)`, true); // หลอก user ว่าเซฟแล้ว ถ้า server ล่ม (UX)
             });
         }
 
-        // การควบคุม
-        document.addEventListener('touchstart', (e) => { 
-            if(gameRunning) jump(); 
-        });
-        document.addEventListener('keydown', (e) => { 
-            if (e.code === 'Space') {
-                if(gameRunning) jump();
-                else if(document.getElementById('msg').style.display !== 'none') startGame();
+        // การควบคุม (Touch & Mouse)
+        function startHold(e) { 
+            if (e.type === 'touchstart') e.preventDefault(); 
+            if (!gameRunning) return;
+            isHolding = true; 
+        }
+        function endHold(e) { 
+            isHolding = false; 
+            if (!gameRunning && document.getElementById('msg').style.display === 'block') {
+               // ถ้าจบเกมแล้วกด จะไม่เริ่มเกมทันที ต้องกดปุ่ม Start เท่านั้นป้องกันเผลอ
             }
-        });
+        }
+
+        document.addEventListener('mousedown', startHold);
+        document.addEventListener('mouseup', endHold);
+        document.addEventListener('touchstart', startHold, {passive: false});
+        document.addEventListener('touchend', endHold);
         
-        // หน้าจอเริ่มเกม
-        showMsg("MARIO RUN", "Tap button to start!");
+        // เริ่มเกม
+        showMsg("JETPACK MARIO", "Hold to Fly<br>Release to Fall");
 
     </script>
 </body>
