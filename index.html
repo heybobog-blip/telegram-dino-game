@@ -7,7 +7,7 @@
     <style>
         body { margin: 0; padding: 0; background: #5c94fc; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
         
-        /* พื้นหลัง: ท้องฟ้า + พื้นดินแบบมาริโอ้ */
+        /* พื้นหลัง: ท้องฟ้า + พื้นดินแบบไล่สี */
         #gameContainer { 
             position: relative; 
             width: 320px; 
@@ -89,7 +89,7 @@
             ctx.fillStyle = '#00aa00'; 
             ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
             
-            // เงาสีเขียวอ่อน
+            // เงาสีเขียวอ่อน (Highlight)
             ctx.fillStyle = '#55ff55';
             ctx.fillRect(x + 4, y + 2, 4, h - 2);
             
@@ -182,7 +182,7 @@
         }
 
         function sendScoreToBot(score) {
-            // ✅ ลิ้งก์ Render ของคุณ
+            // ✅ ลิ้งก์ Render ของคุณ (ใส่ให้แล้ว)
             const serverUrl = "https://dino-bot-server.onrender.com/submit_score";
 
             fetch(`${serverUrl}?id=${userId}&score=${score}&chat_id=${chatId}&message_id=${messageId}`)
