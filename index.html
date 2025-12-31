@@ -5,14 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Mario Run</title>
     <style>
-        /* ปรับพื้นหลังให้เป็นสีฟ้าท้องฟ้า */
         body { margin: 0; padding: 0; background: #5c94fc; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        /* ใส่พื้นหลังให้ตัวเกม */
-        #gameContainer { position: relative; width: 320px; height: 180px; background: url('https://i.imgur.com/8RKCgd8.png') no-repeat bottom center; background-size: cover; border: 4px solid #000; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
+        
+        /* พื้นหลัง: ท้องฟ้า + พื้นดินแบบมาริโอ้ */
+        #gameContainer { 
+            position: relative; 
+            width: 320px; 
+            height: 180px; 
+            background: linear-gradient(#5c94fc 80%, #c84c0c 80%); /* สีฟ้าตัดสีน้ำตาลอิฐ */
+            border: 4px solid #000; 
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); 
+        }
+        
         #gameCanvas { display: block; }
-        /* ปรับ Font ให้ดูเป็นเกม Pixel */
+        
         #scoreBoard { position: absolute; top: 10px; left: 10px; font-size: 18px; color: #fff; text-shadow: 2px 2px #000; font-weight: bold; z-index: 10;}
-        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 16px; text-align: center; text-shadow: 2px 2px #000; width: 100%; z-index: 10; }
+        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 16px; text-align: center; text-shadow: 2px 2px #000; width: 100%; z-index: 10; font-weight: bold; }
     </style>
     <script src="https://telegram.org/js/games.js"></script>
 </head>
@@ -27,65 +35,99 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // --- ส่วนโหลดรูปภาพ (Assets) ---
-        const marioImg = new Image();
-        // ใช้รูปมาริโอ้จากเน็ต (ถ้าคุณมีรูปเอง ให้แก้ลิ้งก์ตรงนี้)
-        marioImg.src = 'https://i.imgur.com/T812t3R.png'; 
-
-        const pipeImg = new Image();
-        // ใช้รูปท่อจากเน็ต
-        pipeImg.src = 'https://i.imgur.com/GqF70y2.png';
-        // -----------------------------
-
-        // --- ตั้งค่าความยากง่าย (ปรับแก้ตรงนี้) ---
-        let gameSpeed = 2.5;   // ความเร็วเริ่มต้น (ของเดิม 3, ลดลงให้ง่ายขึ้น)
-        let gravity = 0.5;     // แรงดึงดูด (ของเดิม 0.6, ลดลงให้ลอยตัวนานขึ้นนิดนึง)
-        let jumpPower = -8.5;  // แรงกระโดด
-        // --------------------------------------
-
+        // --- ตั้งค่าเกม ---
+        let gameSpeed = 3;
+        let gravity = 0.6;
+        let jumpPower = -9;
         let score = 0;
         let gameRunning = false;
-        // ปรับขนาดมาริโอ้ให้เหมาะสมกับรูป
-        let player = { x: 40, y: 135, w: 24, h: 32, dy: 0, grounded: true };
+        
+        // ตัวละคร (ขนาด 24x30)
+        let player = { x: 40, y: 114, w: 24, h: 30, dy: 0, grounded: true };
         let obstacles = [];
-        const groundY = 135; // ระดับพื้นดิน
+        const groundY = 114; // จุดยืนบนพื้น
 
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('id'); 
         const chatId = urlParams.get('chat_id');
         const messageId = urlParams.get('message_id');
 
-        function drawPlayer() {
-            // เปลี่ยนจาก fillRect เป็น drawImage เพื่อวาดรูปมาริโอ้
-            if (marioImg.complete) {
-                 ctx.drawImage(marioImg, player.x, player.y, player.w, player.h);
-            } else {
-                // ถ้าภาพยังโหลดไม่เสร็จ ให้วาดสี่เหลี่ยมสีแดงแก้ขัดไปก่อน
-                ctx.fillStyle = 'red';
-                ctx.fillRect(player.x, player.y, player.w, player.h);
-            }
+        // --- ฟังก์ชันวาดมาริโอ้ (วาดเองไม่ง้อรูป) ---
+        function drawMario(x, y) {
+            // หัว (สีเนื้อ)
+            ctx.fillStyle = '#ffcc99';
+            ctx.fillRect(x + 4, y, 16, 10);
+            
+            // หมวก (สีแดง)
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(x + 4, y, 16, 4); // ตัวหมวก
+            ctx.fillRect(x + 14, y + 2, 8, 2); // ปีกหมวก
+            
+            // เสื้อ (สีแดง)
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(x + 4, y + 10, 16, 10);
+            
+            // เอี๊ยม (สีน้ำเงิน)
+            ctx.fillStyle = '#0000ff';
+            ctx.fillRect(x + 6, y + 16, 12, 8); // ตัวเอี๊ยม
+            ctx.fillRect(x + 2, y + 12, 4, 8);  // แขนซ้าย
+            ctx.fillRect(x + 18, y + 12, 4, 8); // แขนขวา
+            
+            // รองเท้า (สีน้ำตาล)
+            ctx.fillStyle = '#663300';
+            ctx.fillRect(x + 2, y + 24, 8, 6);
+            ctx.fillRect(x + 14, y + 24, 8, 6);
+        }
+
+        // --- ฟังก์ชันวาดท่อ (วาดเองไม่ง้อรูป) ---
+        function drawPipe(x, y, w, h) {
+            // ขอบดำ
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x, y, w, h);
+            
+            // ตัวท่อสีเขียว
+            ctx.fillStyle = '#00aa00'; 
+            ctx.fillRect(x + 2, y + 2, w - 4, h - 2);
+            
+            // เงาสีเขียวอ่อน
+            ctx.fillStyle = '#55ff55';
+            ctx.fillRect(x + 4, y + 2, 4, h - 2);
+            
+            // หัวท่อ (Rim)
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x - 2, y, w + 4, 10); // ขอบหัวท่อ
+            ctx.fillStyle = '#00aa00';
+            ctx.fillRect(x, y + 2, w, 6); // สีหัวท่อ
         }
 
         function createObstacle() {
-            // เพิ่มระยะห่างขั้นต่ำให้มากขึ้น (จาก 150 เป็น 200) เพื่อให้เกมง่ายขึ้น
-            let gap = Math.random() * 200 + 200; 
-            // ปรับขนาดท่อให้เหมาะสม
-            obstacles.push({ x: canvas.width + gap, y: 120, w: 26, h: 50 }); 
+            let gap = Math.random() * 150 + 200; 
+            // สร้างท่อ สูง 40
+            obstacles.push({ x: canvas.width + gap, y: 104, w: 26, h: 40 }); 
         }
 
         function update() {
             if (!gameRunning) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // --- วาดพื้นดิน (ลายอิฐ) ---
+            ctx.fillStyle = '#c84c0c'; // สีดิน
+            ctx.fillRect(0, 144, canvas.width, 36);
+            ctx.fillStyle = '#f89c6c'; // เส้นลายอิฐ
+            ctx.fillRect(0, 146, canvas.width, 2);
+            // -------------------------
+
             // Player Physics
             player.dy += gravity;
             player.y += player.dy;
             if (player.y > groundY) { player.y = groundY; player.dy = 0; player.grounded = true; }
-            drawPlayer();
+            
+            // วาดมาริโอ้
+            drawMario(player.x, player.y);
 
-            // Obstacles management
-            if (Math.random() < 0.015) { // ลดโอกาสเกิดท่อลงเล็กน้อย (จาก 0.02)
-                 if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 150) {
+            // Obstacles
+            if (Math.random() < 0.015) { 
+                 if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 180) {
                     createObstacle();
                  }
             }
@@ -94,26 +136,20 @@
                 let obs = obstacles[i];
                 obs.x -= gameSpeed;
                 
-                // วาดรูปท่อ
-                if (pipeImg.complete) {
-                    ctx.drawImage(pipeImg, obs.x, obs.y, obs.w, obs.h);
-                } else {
-                    ctx.fillStyle = 'green';
-                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-                }
+                // วาดท่อ
+                drawPipe(obs.x, obs.y, obs.w, obs.h);
 
-                // Collision Detection (เช็คการชนแบบคร่าวๆ)
-                // ปรับ hitbox ให้เล็กลงนิดหน่อย (obs.w - 5) เพื่อให้ชนยากขึ้นอีกนิด
-                if (player.x < obs.x + obs.w - 5 && player.x + player.w > obs.x + 5 &&
-                    player.y < obs.y + obs.h && player.y + player.h > obs.y + 5) {
+                // Collision Detection (เช็คชนแบบละเอียดขึ้น)
+                if (player.x < obs.x + obs.w - 4 && player.x + player.w > obs.x + 4 &&
+                    player.y < obs.y + obs.h && player.y + player.h > obs.y) {
                     gameOver();
                 }
             }
-            obstacles = obstacles.filter(obs => obs.x > -30);
+            obstacles = obstacles.filter(obs => obs.x > -40);
 
-            // Score and Speed increase
+            // Score
             score++;
-            if (score % 500 === 0) gameSpeed += 0.2; // ค่อยๆ เพิ่มความเร็วทุก 500 คะแนน
+            if (score % 500 === 0) gameSpeed += 0.2; 
             document.getElementById('scoreBoard').innerText = "Score: " + Math.floor(score/10);
             
             requestAnimationFrame(update);
@@ -130,7 +166,7 @@
 
         function startGame() {
             score = 0;
-            gameSpeed = 2.5; // รีเซ็ตความเร็ว
+            gameSpeed = 3;
             obstacles = [];
             gameRunning = true;
             player.y = groundY;
@@ -146,7 +182,7 @@
         }
 
         function sendScoreToBot(score) {
-            // ✅ ลิ้งก์ Render ของคุณ (ใส่ให้แล้ว)
+            // ✅ ลิ้งก์ Render ของคุณ
             const serverUrl = "https://dino-bot-server.onrender.com/submit_score";
 
             fetch(`${serverUrl}?id=${userId}&score=${score}&chat_id=${chatId}&message_id=${messageId}`)
