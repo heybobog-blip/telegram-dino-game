@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dino Run</title>
+    <style>
+        body { margin: 0; padding: 0; background: #f7f7f7; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #gameCanvas { background: #fff; border-bottom: 2px solid #535353; }
+        #scoreBoard { font-size: 20px; color: #535353; margin-bottom: 10px; }
+        #msg { color: #888; font-size: 14px; margin-top: 10px; }
+    </style>
+    <script src="https://telegram.org/js/games.js"></script>
+</head>
+<body>
+    <div id="scoreBoard">Score: 0</div>
+    <canvas id="gameCanvas" width="320" height="150"></canvas>
+    <div id="msg">Tap to Jump / Start</div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let score = 0;
+        let gameRunning = false;
+        let player = { x: 30, y: 120, w: 20, h: 20, dy: 0, jumpPower: -10, grounded: true };
+        let obstacles = [];
+        let gravity = 0.6;
+        let speed = 3;
+        let gameInterval;
+
+        // ดึง user_id จาก URL (Telegram จะส่งมาให้)
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('id'); 
+
+        function drawPlayer() {
+            ctx.fillStyle = '#535353'; // สีไดโนเสาร์
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+        }
+
+        function createObstacle() {
+            let gap = Math.random() * 200 + 150; 
+            obstacles.push({ x: canvas.width + gap, y: 130, w: 10, h: 10 }); // สิ่งกีดขวาง
+        }
+
+        function update() {
+            if (!gameRunning) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Player Physics
+            player.dy += gravity;
+            player.y += player.dy;
+            if (player.y > 120) { player.y = 120; player.dy = 0; player.grounded = true; }
+            drawPlayer();
+
+            // Obstacles
+            if (Math.random() < 0.02) createObstacle();
+            
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.x -= speed;
+                ctx.fillStyle = '#ff0000'; // สีสิ่งกีดขวาง
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+
+                // Collision Detection (ชนแล้วตาย)
+                if (player.x < obs.x + obs.w && player.x + player.w > obs.x &&
+                    player.y < obs.y + obs.h && player.y + player.h > obs.y) {
+                    gameOver();
+                }
+            }
+            // ลบอุปสรรคที่พ้นจอ
+            obstacles = obstacles.filter(obs => obs.x > -20);
+
+            // Score
+            score++;
+            document.getElementById('scoreBoard').innerText = "Score: " + Math.floor(score/10);
+            
+            requestAnimationFrame(update);
+        }
+
+        function jump() {
+            if (!gameRunning) {
+                startGame();
+            } else if (player.grounded) {
+                player.dy = player.jumpPower;
+                player.grounded = false;
+            }
+        }
+
+        function startGame() {
+            score = 0;
+            obstacles = [];
+            gameRunning = true;
+            player.y = 120;
+            document.getElementById('msg').innerText = "Running...";
+            update();
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            let finalScore = Math.floor(score/10);
+            document.getElementById('msg').innerText = "Game Over! Score sent.";
+            
+            // **ส่วนสำคัญ: ส่งคะแนนกลับไปหา Bot**
+            // เนื่องจากเราทำแบบฟรีและง่าย เราจะใช้เทคนิคการยิง Request ไปที่บอทของเรา
+            // ในที่นี้เราจะเตรียม Function ไว้
+            sendScoreToBot(finalScore);
+        }
+
+        function sendScoreToBot(score) {
+            // ส่งข้อมูลคะแนนไปที่ Bot ผ่าน Webhook (ต้องรัน Python script ด้านล่าง)
+            // หมายเหตุ: ในการใช้งานจริง ควรใช้ https แต่เพื่อการเทสเรายิงไปที่ API Telegram โดยตรงไม่ได้ (ไม่ปลอดภัย)
+            // ดังนั้นเราจะใช้ fetch ไปที่ endpoint ของเรา (หรือใช้ Telegram Game Proxy ถ้ามี)
+            
+            // *สำคัญ* เพื่อให้ง่ายที่สุดสำหรับ Tutorial นี้ เราจะแสดง Alert แทน
+            // แต่ถ้าจะบันทึกจริง ต้องมี Backend Python คอยรับ
+            console.log("Sending score: " + score);
+            
+            // ส่ง event กลับไปให้ Bot (ผ่าน query string หรือ API)
+            // วิธีที่ง่ายที่สุดสำหรับมือใหม่คือใช้ fetch ไปยัง Python Server ที่เราจะสร้าง
+            fetch(`https://YOUR-PYTHON-SERVER-URL/submit_score?id=${userId}&score=${score}`)
+        }
+
+        // Controls
+        document.addEventListener('keydown', (e) => { if(e.code === 'Space') jump(); });
+        document.addEventListener('touchstart', jump);
+        document.addEventListener('click', jump);
+    </script>
+</body>
+</html>
