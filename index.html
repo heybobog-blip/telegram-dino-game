@@ -3,44 +3,74 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Dino Run</title>
+    <title>Mario Run</title>
     <style>
-        body { margin: 0; padding: 0; background: #f7f7f7; font-family: Arial, sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
-        #gameCanvas { background: #fff; border-bottom: 2px solid #535353; }
-        #scoreBoard { font-size: 20px; color: #535353; margin-bottom: 10px; }
-        #msg { color: #888; font-size: 14px; margin-top: 10px; }
+        /* ปรับพื้นหลังให้เป็นสีฟ้าท้องฟ้า */
+        body { margin: 0; padding: 0; background: #5c94fc; font-family: 'Courier New', monospace; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        /* ใส่พื้นหลังให้ตัวเกม */
+        #gameContainer { position: relative; width: 320px; height: 180px; background: url('https://i.imgur.com/8RKCgd8.png') no-repeat bottom center; background-size: cover; border: 4px solid #000; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
+        #gameCanvas { display: block; }
+        /* ปรับ Font ให้ดูเป็นเกม Pixel */
+        #scoreBoard { position: absolute; top: 10px; left: 10px; font-size: 18px; color: #fff; text-shadow: 2px 2px #000; font-weight: bold; z-index: 10;}
+        #msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #fff; font-size: 16px; text-align: center; text-shadow: 2px 2px #000; width: 100%; z-index: 10; }
     </style>
     <script src="https://telegram.org/js/games.js"></script>
 </head>
 <body>
-    <div id="scoreBoard">Score: 0</div>
-    <canvas id="gameCanvas" width="320" height="150"></canvas>
-    <div id="msg">Tap to Jump / Start</div>
+    <div id="gameContainer">
+        <div id="scoreBoard">Score: 0</div>
+        <canvas id="gameCanvas" width="320" height="180"></canvas>
+        <div id="msg">Tap to Start!</div>
+    </div>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+
+        // --- ส่วนโหลดรูปภาพ (Assets) ---
+        const marioImg = new Image();
+        // ใช้รูปมาริโอ้จากเน็ต (ถ้าคุณมีรูปเอง ให้แก้ลิ้งก์ตรงนี้)
+        marioImg.src = 'https://i.imgur.com/T812t3R.png'; 
+
+        const pipeImg = new Image();
+        // ใช้รูปท่อจากเน็ต
+        pipeImg.src = 'https://i.imgur.com/GqF70y2.png';
+        // -----------------------------
+
+        // --- ตั้งค่าความยากง่าย (ปรับแก้ตรงนี้) ---
+        let gameSpeed = 2.5;   // ความเร็วเริ่มต้น (ของเดิม 3, ลดลงให้ง่ายขึ้น)
+        let gravity = 0.5;     // แรงดึงดูด (ของเดิม 0.6, ลดลงให้ลอยตัวนานขึ้นนิดนึง)
+        let jumpPower = -8.5;  // แรงกระโดด
+        // --------------------------------------
+
         let score = 0;
         let gameRunning = false;
-        let player = { x: 30, y: 120, w: 20, h: 20, dy: 0, jumpPower: -10, grounded: true };
+        // ปรับขนาดมาริโอ้ให้เหมาะสมกับรูป
+        let player = { x: 40, y: 135, w: 24, h: 32, dy: 0, grounded: true };
         let obstacles = [];
-        let gravity = 0.6;
-        let speed = 3;
-        
-        // รับค่า ID ต่างๆ จาก URL ที่บอทส่งมา
+        const groundY = 135; // ระดับพื้นดิน
+
         const urlParams = new URLSearchParams(window.location.search);
         const userId = urlParams.get('id'); 
         const chatId = urlParams.get('chat_id');
         const messageId = urlParams.get('message_id');
 
         function drawPlayer() {
-            ctx.fillStyle = '#535353'; 
-            ctx.fillRect(player.x, player.y, player.w, player.h);
+            // เปลี่ยนจาก fillRect เป็น drawImage เพื่อวาดรูปมาริโอ้
+            if (marioImg.complete) {
+                 ctx.drawImage(marioImg, player.x, player.y, player.w, player.h);
+            } else {
+                // ถ้าภาพยังโหลดไม่เสร็จ ให้วาดสี่เหลี่ยมสีแดงแก้ขัดไปก่อน
+                ctx.fillStyle = 'red';
+                ctx.fillRect(player.x, player.y, player.w, player.h);
+            }
         }
 
         function createObstacle() {
-            let gap = Math.random() * 200 + 150; 
-            obstacles.push({ x: canvas.width + gap, y: 130, w: 10, h: 10 }); 
+            // เพิ่มระยะห่างขั้นต่ำให้มากขึ้น (จาก 150 เป็น 200) เพื่อให้เกมง่ายขึ้น
+            let gap = Math.random() * 200 + 200; 
+            // ปรับขนาดท่อให้เหมาะสม
+            obstacles.push({ x: canvas.width + gap, y: 120, w: 26, h: 50 }); 
         }
 
         function update() {
@@ -50,28 +80,40 @@
             // Player Physics
             player.dy += gravity;
             player.y += player.dy;
-            if (player.y > 120) { player.y = 120; player.dy = 0; player.grounded = true; }
+            if (player.y > groundY) { player.y = groundY; player.dy = 0; player.grounded = true; }
             drawPlayer();
 
-            // Obstacles
-            if (Math.random() < 0.02) createObstacle();
+            // Obstacles management
+            if (Math.random() < 0.015) { // ลดโอกาสเกิดท่อลงเล็กน้อย (จาก 0.02)
+                 if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 150) {
+                    createObstacle();
+                 }
+            }
             
             for (let i = 0; i < obstacles.length; i++) {
                 let obs = obstacles[i];
-                obs.x -= speed;
-                ctx.fillStyle = '#ff0000'; 
-                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                obs.x -= gameSpeed;
+                
+                // วาดรูปท่อ
+                if (pipeImg.complete) {
+                    ctx.drawImage(pipeImg, obs.x, obs.y, obs.w, obs.h);
+                } else {
+                    ctx.fillStyle = 'green';
+                    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                }
 
-                // Collision Detection
-                if (player.x < obs.x + obs.w && player.x + player.w > obs.x &&
-                    player.y < obs.y + obs.h && player.y + player.h > obs.y) {
+                // Collision Detection (เช็คการชนแบบคร่าวๆ)
+                // ปรับ hitbox ให้เล็กลงนิดหน่อย (obs.w - 5) เพื่อให้ชนยากขึ้นอีกนิด
+                if (player.x < obs.x + obs.w - 5 && player.x + player.w > obs.x + 5 &&
+                    player.y < obs.y + obs.h && player.y + player.h > obs.y + 5) {
                     gameOver();
                 }
             }
-            obstacles = obstacles.filter(obs => obs.x > -20);
+            obstacles = obstacles.filter(obs => obs.x > -30);
 
-            // Score
+            // Score and Speed increase
             score++;
+            if (score % 500 === 0) gameSpeed += 0.2; // ค่อยๆ เพิ่มความเร็วทุก 500 คะแนน
             document.getElementById('scoreBoard').innerText = "Score: " + Math.floor(score/10);
             
             requestAnimationFrame(update);
@@ -81,49 +123,45 @@
             if (!gameRunning) {
                 startGame();
             } else if (player.grounded) {
-                player.dy = player.jumpPower;
+                player.dy = jumpPower;
                 player.grounded = false;
             }
         }
 
         function startGame() {
             score = 0;
+            gameSpeed = 2.5; // รีเซ็ตความเร็ว
             obstacles = [];
             gameRunning = true;
-            player.y = 120;
-            document.getElementById('msg').innerText = "Running...";
+            player.y = groundY;
+            document.getElementById('msg').innerText = "";
             update();
         }
 
         function gameOver() {
             gameRunning = false;
             let finalScore = Math.floor(score/10);
-            document.getElementById('msg').innerText = "Game Over! Sending score...";
-            
+            document.getElementById('msg').innerHTML = "GAME OVER!<br>Score: " + finalScore + "<br>Sending score...";
             sendScoreToBot(finalScore);
         }
 
         function sendScoreToBot(score) {
-            // นี่คือ URL ของ Render Server ของคุณที่ใส่ให้เรียบร้อยแล้ว
+            // ✅ ลิ้งก์ Render ของคุณ (ใส่ให้แล้ว)
             const serverUrl = "https://dino-bot-server.onrender.com/submit_score";
 
-            // ส่งข้อมูลทั้งหมด (userId, score, chatId, messageId) ไปที่ Server
             fetch(`${serverUrl}?id=${userId}&score=${score}&chat_id=${chatId}&message_id=${messageId}`)
             .then(response => {
                 if (response.ok) {
-                    document.getElementById('msg').innerText = "Score Saved! Check Leaderboard.";
+                    document.getElementById('msg').innerHTML = "GAME OVER!<br>Score Saved!<br>Tap to play again";
                 } else {
                     document.getElementById('msg').innerText = "Error saving score.";
-                    console.error("Server error:", response);
                 }
             })
             .catch(error => {
                 document.getElementById('msg').innerText = "Connection Error.";
-                console.error("Fetch error:", error);
             });
         }
 
-        // Controls
         document.addEventListener('keydown', (e) => { if(e.code === 'Space') jump(); });
         document.addEventListener('touchstart', jump);
         document.addEventListener('click', jump);
