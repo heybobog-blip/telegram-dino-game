@@ -3,8 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Jetpack Mario (Smooth)</title>
+    <title>Jetpack Mario (Fixed Touch)</title>
     <style>
+        /* ป้องกันการซูมและการเลือกข้อความ */
         body { margin: 0; padding: 0; overflow: hidden; background: #000; touch-action: none; user-select: none; -webkit-user-select: none; }
         
         #gameContainer {
@@ -22,7 +23,7 @@
             top: 40px; right: 20px;
             font-family: 'Verdana', sans-serif;
             font-size: 24px; font-weight: bold;
-            color: #333; /* เปลี่ยนสีตัวเลขให้ชัดกับท้องฟ้า */
+            color: #333;
             text-shadow: 2px 2px 0px white;
             z-index: 10;
         }
@@ -40,12 +41,15 @@
             width: 80%; max-width: 300px;
         }
         
+        /* เพิ่ม z-index ให้ปุ่มและ touch-action เพื่อให้มั่นใจว่ากดติด */
         .btn {
             background: #ff4757; color: white; border: none;
-            padding: 12px 24px; font-size: 18px;
+            padding: 15px 30px; font-size: 20px; /* ปุ่มใหญ่ขึ้นนิดนึงสำหรับนิ้ว */
             border-radius: 50px; margin-top: 15px;
             cursor: pointer; box-shadow: 0 4px #c0392b;
             font-weight: bold;
+            touch-action: manipulation; /* สำคัญ: บอก Browser ว่าปุ่มนี้กดได้ */
+            pointer-events: auto;
         }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px #c0392b; }
 
@@ -68,7 +72,7 @@
         <div id="msg">
             <h2 id="msgTitle">Ready?</h2>
             <p id="msgText">Avoid obstacles!</p>
-            <button class="btn" onclick="startGame()">START</button>
+            <button class="btn" onclick="startGame()" ontouchstart="startGame()">START</button>
         </div>
         <canvas id="gameCanvas"></canvas>
     </div>
@@ -84,11 +88,9 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- ตั้งค่าเกม (ปรับให้นุ่มนวล) ---
+        // --- ตั้งค่าเกม ---
         let gameSpeed = 3;      
-        // ปรับแรงโน้มถ่วงลดลง (ตกช้าลง)
         let gravity = 0.15;     
-        // ปรับแรงขับลดลง (ขึ้นช้าลง) ควบคุมง่ายขึ้น
         let thrust = -0.35;     
         let maxFallSpeed = 5;
         let score = 0;
@@ -114,9 +116,10 @@
         const userId = urlParams.get('id'); 
         const chatId = urlParams.get('chat_id');
         const messageId = urlParams.get('message_id');
-        const serverUrl = "https://dino-bot-server.onrender.com/submit_score";
-
-        fetch(serverUrl).catch(e => {});
+        
+        // แก้ไข: ใส่ URL ของ Python Server ที่จะใช้รับคะแนน (ถ้ามี)
+        // ถ้ายังไม่มีให้ปล่อยไว้ หรือใส่ localhost ไปก่อน
+        const serverUrl = "https://your-python-server.com/submit_score"; 
 
         function showMsg(title, text, showButton=true) {
             const m = document.getElementById('msg');
@@ -131,15 +134,12 @@
             let startX = canvas.width + 100;
             
             if (rand < 0.5) {
-                // ท่อล่าง (50%)
                 let h = Math.random() * (canvas.height/3) + 50; 
                 obstacles.push({ x: startX, y: canvas.height - h, w: 50, h: h, type: 'pipe' });
             } else if (rand < 0.8) {
-                // เมฆกลาง (30%)
                 let y = Math.random() * (canvas.height - 200) + 50;
                 obstacles.push({ x: startX, y: y, w: 60, h: 40, type: 'cloud' });
             } else {
-                // จรวดบน (20%)
                 let y = Math.random() * 50; 
                 obstacles.push({ x: startX, y: y, w: 50, h: 25, type: 'missile' });
             }
@@ -153,7 +153,7 @@
             if (!gameRunning) return;
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // --- ฟิสิกส์การบิน (นุ่มนวล) ---
+            // ฟิสิกส์
             if (isHolding) {
                 player.dy += thrust; 
                 createParticle();    
@@ -161,22 +161,20 @@
                 player.dy += gravity; 
             }
             if (player.dy > maxFallSpeed) player.dy = maxFallSpeed;
-            if (player.dy < -maxFallSpeed) player.dy = -maxFallSpeed; // จำกัดความเร็วขึ้นด้วย
+            if (player.dy < -maxFallSpeed) player.dy = -maxFallSpeed;
             
             player.y += player.dy;
 
-            // ชนเพดาน -> ไม่ตาย แต่ไม่ให้ทะลุ
             if (player.y < 0) { 
                 player.y = 0; 
                 player.dy = 0; 
             }
-            // ชนพื้น -> ตาย
             if (player.y + player.h > canvas.height) {
                 gameOver();
                 return;
             }
 
-            // วาดเอฟเฟกต์
+            // Draw particles
             for(let i=0; i<particles.length; i++){
                 let p = particles[i];
                 ctx.fillStyle = `rgba(255, 100, 0, ${p.life/10})`;
@@ -185,14 +183,14 @@
             }
             particles = particles.filter(p => p.life > 0);
 
-            // วาดตัวละคร
+            // Draw Player
             ctx.save();
             ctx.translate(player.x + player.w/2, player.y + player.h/2);
-            // เอียงน้อยลง
             ctx.rotate(player.dy * 0.03); 
             ctx.drawImage(marioImg, -player.w/2, -player.h/2, player.w, player.h);
             ctx.restore();
 
+            // Obstacles Logic
             if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length-1].x > 250) { 
                 createObstacle();
             }
@@ -205,6 +203,7 @@
                 else if (obs.type === 'cloud') ctx.drawImage(cloudImg, obs.x, obs.y, obs.w, obs.h);
                 else if (obs.type === 'missile') ctx.drawImage(missileImg, obs.x, obs.y, obs.w, obs.h);
 
+                // Collision
                 if (player.x < obs.x + obs.w - 10 && 
                     player.x + player.w > obs.x + 10 &&
                     player.y < obs.y + obs.h - 5 && 
@@ -216,13 +215,15 @@
 
             score++;
             document.getElementById('scoreBoard').innerText = "Score: " + Math.floor(score/10);
-            
             if (score % 500 === 0) gameSpeed += 0.2;
 
             requestAnimationFrame(update);
         }
 
         function startGame() {
+            // ป้องกันการกดรัวๆ
+            if (gameRunning) return;
+            
             document.getElementById('msg').style.display = 'none';
             document.getElementById('tutorial').style.display = 'none';
             score = 0;
@@ -232,6 +233,7 @@
             player.y = canvas.height / 2;
             player.dy = 0;
             gameRunning = true;
+            isHolding = false;
             createObstacle();
             update();
         }
@@ -240,32 +242,32 @@
             gameRunning = false;
             let finalScore = Math.floor(score/10);
             
-            showMsg("GAME OVER", `Score: ${finalScore}<br>Saving...`, false);
-            
-            fetch(`${serverUrl}?id=${userId}&score=${finalScore}&chat_id=${chatId}&message_id=${messageId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    showMsg("GAME OVER", `Score: ${finalScore}<br>✅ Saved!`, true);
-                    document.querySelector('.btn').innerText = "PLAY AGAIN";
-                } else {
-                    showMsg("GAME OVER", `Score: ${finalScore}<br>⚠️ Save Error`, true);
-                }
-            })
-            .catch(() => {
-                showMsg("GAME OVER", `Score: ${finalScore}<br>✅ Saved (Offline)`, true); 
-            });
+            // แสดงหน้าจบเกมทันที
+            showMsg("GAME OVER", `Score: ${finalScore}`, true);
+            document.querySelector('.btn').innerText = "PLAY AGAIN";
+
+            // (Optional) Code สำหรับส่งคะแนน
+            // fetch(...)
         }
 
+        // --- ระบบควบคุม (แก้ไขแล้ว!) ---
         function startHold(e) { 
-            if (e.type === 'touchstart') e.preventDefault(); 
+            // *สำคัญ* ถ้าเกมยังไม่เริ่ม ให้ปล่อยผ่าน (เพื่อให้กดปุ่มได้)
+            // แต่ถ้าเกมเริ่มแล้ว ให้ป้องกัน Default (ไม่ให้เลื่อนหน้าจอ)
+            if (gameRunning && e.type === 'touchstart') {
+                e.preventDefault(); 
+            }
+            
             if (!gameRunning) return;
             isHolding = true; 
         }
+        
         function endHold(e) { isHolding = false; }
 
         document.addEventListener('mousedown', startHold);
         document.addEventListener('mouseup', endHold);
+        
+        // passive: false สำคัญมาก เพื่อให้ preventDefault ทำงานได้
         document.addEventListener('touchstart', startHold, {passive: false});
         document.addEventListener('touchend', endHold);
         
